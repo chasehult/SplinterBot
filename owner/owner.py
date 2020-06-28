@@ -1,8 +1,8 @@
 import discord
 
-from redbot.core import checks, Config
+from redbot.core import checks
 from redbot.core import commands
-from redbot.core.utils.chat_formatting import box, pagify, inline
+from redbot.core.utils.chat_formatting import inline
 
 
 class Owner(commands.Cog):
@@ -10,7 +10,7 @@ class Owner(commands.Cog):
         super().__init__(*args, **kwargs)
         self.bot = bot
 
-    #@commands.command()
+    # @commands.command()
     @checks.is_owner()
     async def reset_all(self, ctx):
         await self.bot.get_cog("SBCore").config.clear_all()

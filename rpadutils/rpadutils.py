@@ -12,6 +12,7 @@ from redbot.core import commands
 
 RPADCOG = None
 
+
 class RpadUtils(commands.Cog):
     def __init__(self, bot, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -26,6 +27,7 @@ class RpadUtils(commands.Cog):
         if author.bot:
             return False
         return True
+
 
 def timeout_after(seconds=10, error_message=os.strerror(errno.ETIME)):
     def decorator(func):
@@ -46,10 +48,11 @@ def timeout_after(seconds=10, error_message=os.strerror(errno.ETIME)):
     return decorator
 
 
-async def confirm_message(ctx, text, yemoji = "✅", nemoji = "❌", timeout = 10):
+async def confirm_message(ctx, text, yemoji="✅", nemoji="❌", timeout=10):
     msg = await ctx.send(text)
     await msg.add_reaction(yemoji)
     await msg.add_reaction(nemoji)
+
     def check(reaction, user):
         return (str(reaction.emoji) in [yemoji, nemoji]
                 and user.id == ctx.author.id
@@ -66,6 +69,7 @@ async def confirm_message(ctx, text, yemoji = "✅", nemoji = "❌", timeout = 1
     await msg.delete()
     return ret
 
+
 def corowrap(coro, loop):
     def func(*args, **kwargs):
         fut = asyncio.run_coroutine_threadsafe(coro, loop)
@@ -75,12 +79,14 @@ def corowrap(coro, loop):
             pass
     return func
 
+
 def fawait(coro, loop):
     fut = asyncio.run_coroutine_threadsafe(coro, loop)
     try:
         fut.result()
     except:
         pass
+
 
 async def doubleup(ctx, message):
     lmessage = await ctx.history().__anext__()
@@ -92,14 +98,16 @@ async def doubleup(ctx, message):
     else:
         await ctx.send(message)
 
-async def isimage(fp: discord.Attachment):
-    fp = io.FileIO(fp.filename, "w+")
+
+async def isimage(att: discord.Attachment):
+    fp = io.FileIO(att.filename, "w+")
     try:
         await att.save(fp, use_cached=True)
     except discord.errors.HTTPException:
         await att.save(fp)
     return filetype.is_image(fp)
 
-async def saveimg(fp: io.BufferedIOBase):
+
+async def saveimg(fp: io.FileIO):
     chan = RPADCOG.bot.get_channel(await RPADCOG.bot.get_cog("SBCore").config.savechan())
     return (await chan.send(file=discord.File(fp))).attachments[0].url

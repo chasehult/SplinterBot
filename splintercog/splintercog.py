@@ -4,13 +4,13 @@ import filetype
 import aiohttp
 import discord
 
-from redbot.core import checks, Config
 from redbot.core import commands
 from redbot.core.utils.chat_formatting import box, pagify, inline
 
 from rpadutils import rpadutils
 
 from ABC import Splinter, SplinterACtx
+
 
 class SplinterCog(commands.Cog):
     def __init__(self, bot, *args, **kwargs):
@@ -33,7 +33,7 @@ class SplinterCog(commands.Cog):
         except ValueError:
             await ctx.send("Invalid splinter name.")
 
-    @splinter.command()
+    @splinter.group(invoke_without_command=True)
     async def add(self, ctx, *, name):
         """Adds a new splinter to your Ultimate Self."""
         newsp = await Splinter.new(name)
@@ -47,7 +47,25 @@ class SplinterCog(commands.Cog):
                     "to it.")
         await ctx.send(box(msg))
 
-    @splinter.command()
+    @add.command()
+    async def frompreset(self, ctx, preset, *, name):
+        """Adds a new preset splinter to your Ultimate Self."""
+        try:
+            newsp = await Splinter.fromPreset(preset, name)
+        except ValueError:
+            await ctx.send("Invalid preset.")
+            return
+        async with self.core.config.user(ctx.author).splinters() as splinters:
+            splinters.append(newsp.id)
+        await newsp.save()
+        msg = "Added {} (id: {}) to your Ultimate Self.".format(name, newsp.id)
+        if re.search(r'\s', name):
+            msg += ("\nNOTE: This splinter's name contains whitespace, so you'll need "
+                    "to surround it with double quotes (\") when using commands referring "
+                    "to it.")
+        await ctx.send(box(msg))
+
+    @splinter.command(aliases=["shatter"])
     async def remove(self, ctx, *, name):
         """Perminantly shatters a splinter from your Ultimate Self"""
         sp = await self.core.get_splinter(ctx, name.strip('"'))
@@ -65,12 +83,24 @@ class SplinterCog(commands.Cog):
         """Lists the many splinters of your Ultimate Self"""
         msg = ""
         for sp in await self.core.config.user(ctx.author).splinters():
-            sp = Splinter.fromId(sp)
+            sp = await Splinter.fromId(sp)
             msg += "{} ({})\n".format(sp.name, sp.id)
         if not msg:
             await ctx.send(inline("Your current self is whole.  Try adding a splinter."))
         for page in pagify(msg):
             await ctx.send(box(page))
+
+    @splinter.command()
+    async def presets(self, ctx):
+        """Lists the valid presets to use with [p]splinter add frompreset"""
+        msg = "\n".join(self.bot.get_cog("Homestuck").characters)
+        for page in pagify(msg):
+            await ctx.send(box(page))
+
+    @splinter.command(name="<splinter name>")
+    async def specific_splinter(self, ctx):
+        """Makes changes to a specific splinter."""
+        await ctx.send(inline("Put an actual splinter's name/id, not the literal words."))
 
     @splinter.group()
     @commands.check(lambda ctx: hasattr(ctx, "spec"))
@@ -78,7 +108,7 @@ class SplinterCog(commands.Cog):
         pass
 
     @splinter_name.command(aliases=["getid"])
-    async def id(self, ctx, *, id_error = None):
+    async def id(self, ctx, *, id_error=None):
         """Gets a splinter's ID"""
         if id_error:
             await ctx.send(inline("You cannot set a splinter's ID."))
@@ -86,7 +116,7 @@ class SplinterCog(commands.Cog):
         await ctx.send(inline(ctx.spec.id))
 
     @splinter_name.command(aliases=["setnick", "delnick", "rmnick"])
-    async def nick(self, ctx, *, nick = None):
+    async def nick(self, ctx, *, nick=None):
         """Sets or removes a splinter's nickname."""
         ctx.spec.nick[ctx.guild.id] = nick
         await ctx.send(inline("Done"))
@@ -98,7 +128,7 @@ class SplinterCog(commands.Cog):
         await ctx.send(inline("Done"))
 
     @splinter_name.command(aliases=["setavatar"])
-    async def avatar(self, ctx, *, avatar = None):
+    async def avatar(self, ctx, *, avatar=None):
         """Sets or removes a splinter's avatar."""
         if ctx.message.attachments:
             fp = io.FileIO(ctx.message.attachments[0].filename, "w+")
@@ -127,20 +157,15 @@ class SplinterCog(commands.Cog):
                         fp.write(await resp.read())
                         fp.seek(0)
                         ctx.spec.avatar = await rpadutils.saveimg(fp)
-                except (aiohttp.client_exceptions.InvalidURL, AssertionError):
+                except (aiohttp.InvalidURL, AssertionError):
                     await ctx.send(inline("That's an invalid URL."))
                     return
 
         await ctx.send(inline("Done"))
 
-    @splinter_name.group(aliases=["quirks", "getquirks"], invoke_without_command=True, ignore_extra=False)
+    @splinter_name.group(aliases=["quirks", "getquirks"])
     async def quirk(self, ctx):
         """Manage a splinter's quirks."""
-        msg = ""
-        for c, quirk in enumerate(ctx.spec.quirks):
-            msg += "{2})  {0!r}\n    to\n    {1!r}\n\n".format(*quirk, c+1)
-        for page in pagify(msg):
-            await ctx.send(box(page))
 
     @quirk.command(name="add")
     async def quirk_add(self, ctx, fr, to, *, error=None):
@@ -153,7 +178,11 @@ class SplinterCog(commands.Cog):
 
     @quirk.command(name="list")
     async def quirk_list(self, ctx):
-        await self.quirk(ctx)
+        msg = ""
+        for c, quirk in enumerate(ctx.spec.quirks):
+            msg += "{2}) {0!r}\n    to\n   {1!r}\n\n".format(*quirk, c+1)
+        for page in pagify(msg):
+            await ctx.send(box(page))
 
     @quirk.command(name="remove", aliases=["delete"])
     async def quirk_remove(self, ctx, index: int):
@@ -162,18 +191,12 @@ class SplinterCog(commands.Cog):
             return
         qiq = ctx.spec.quirks[index-1]
         if await rpadutils.confirm_message(ctx, inline("Are you sure you want to delete the "
-                                            "quirk:\n{!r}\nto\n{!r}").format(*qiq)):
+                                                       "quirk:\n{!r}\nto\n{!r}").format(*qiq)):
             ctx.spec.quirks.pop(index-1)
 
-
-    @splinter_name.group(aliases=["rquirks", "getrquirks"], invoke_without_command=True, ignore_extra=False)
+    @splinter_name.group(aliases=["rquirks", "getrquirks"])
     async def rquirk(self, ctx):
         """Manage a splinter's regex quirks."""
-        msg = ""
-        for c, rquirk in enumerate(ctx.spec.rquirks):
-            msg += "{})  r'{}'\n    to\n    r'{}'\n\n".format(c+1, *rquirk)
-        for page in pagify(msg):
-            await ctx.send(box(page))
 
     @rquirk.command(name="add")
     async def rquirk_add(self, ctx, fr, to, *, error=None):
@@ -190,7 +213,11 @@ class SplinterCog(commands.Cog):
 
     @rquirk.command(name="list")
     async def rquirk_list(self, ctx):
-        await self.rquirk(ctx)
+        msg = ""
+        for c, rquirk in enumerate(ctx.spec.rquirks):
+            msg += "{}) r'{}'\n    to\n   r'{}'\n\n".format(c+1, *rquirk)
+        for page in pagify(msg):
+            await ctx.send(box(page))
 
     @rquirk.command(name="remove", aliases=["delete"])
     async def rquirk_remove(self, ctx, index: int):
@@ -199,30 +226,31 @@ class SplinterCog(commands.Cog):
             return
         qiq = ctx.spec.rquirks[index-1]
         if await rpadutils.confirm_message(ctx, inline("Are you sure you want to delete the "
-                                            "regex quirk:\nr'{}'\nto\nr'{}'").format(*qiq)):
+                                                       "regex quirk:\nr'{}'\nto\nr'{}'").format(*qiq)):
             ctx.spec.rquirks.pop(index-1)
-
 
     @splinter_name.group(aliases=["proxies", "getproxies", "getproxy"], invoke_without_command=True, ignore_extra=False)
     async def proxy(self, ctx):
         """Manage a splinter's proxies."""
-        msg = ""
-        for c, proxy in enumerate(ctx.spec.proxies):
-            msg += "{})\t{}\n".format(c+1, proxy)
-        for page in pagify(msg):
-            await ctx.send(box(page))
 
     @proxy.command(name="add")
     async def proxy_add(self, ctx, *, proxy):
         if "text" not in proxy:
             await ctx.send(inline("Your proxy must have the word 'text' in it."))
             return
+        elif proxy.strip() == "text":
+            await ctx.send(inline("You need to supply more than just 'text'."))
+            return
         ctx.spec.proxies.append(proxy)
         await ctx.send(inline("Done"))
 
     @proxy.command(name="list")
     async def proxy_list(self, ctx):
-        await self.proxy(ctx)
+        msg = ""
+        for c, proxy in enumerate(ctx.spec.proxies):
+            msg += "{}) {}\n".format(c+1, proxy)
+        for page in pagify(msg):
+            await ctx.send(box(page))
 
     @proxy.command(name="remove", aliases=["delete"])
     async def proxy_remove(self, ctx, index: int):
@@ -231,5 +259,5 @@ class SplinterCog(commands.Cog):
             return
         piq = ctx.spec.proxies[index-1]
         if await rpadutils.confirm_message(ctx, inline("Are you sure you want to delete the "
-                                                  "proxy:\n{}").format(piq)):
+                                                       "proxy:\n{}").format(piq)):
             ctx.spec.proxies.pop(index-1)

@@ -1,8 +1,8 @@
 import json
 import string
 import contextlib
+import copy
 
-from redbot.core import checks, Config
 from redbot.core import commands
 
 ABCog = None
@@ -24,6 +24,14 @@ class ABC(commands.Cog):
         await self.bot.get_cog("SBCore").config.cid.set(ocid+4133)
         return id
 
+DEFAULTS = {
+    'nick': {},
+    'proxies': [],
+    'color': 0x99aab5,
+    'avatar': None,
+    'quirks': [],   # (from, to)
+    'rquirks': [],  # (from, to)
+}
 
 class Splinter:
     def __init__(self, id, name, nick, proxies, color, avatar, quirks, rquirks):
@@ -45,9 +53,13 @@ class Splinter:
             'proxies': [],
             'color': 0x99aab5,
             'avatar': None,
-            'quirks': [],  # (from, to)
-            'rquirks': [], # (from, to)
+            'quirks': [],   # (from, to)
+            'rquirks': [],  # (from, to)
         })
+
+    @property
+    async def defaults(self):
+        return copy.deepcopy(DEFAULTS)
 
     def toJson(self):
         return json.dumps({
@@ -65,13 +77,22 @@ class Splinter:
     def fromJson(payload):
         return Splinter(**json.loads(payload))
 
-
     @staticmethod
     async def fromId(id):
         newsp = (await ABCog.bot.get_cog("SBCore").config.splinters()).get(id)
         if newsp is None:
             return None
         return Splinter.fromJson(newsp)
+
+    @staticmethod
+    async def fromPreset(query, name):
+        kwargs = copy.deepcopy(DEFAULTS)
+        preset = ABCog.bot.get_cog("Homestuck").get_preset(query)
+        kwargs.update(preset)
+        kwargs.pop('aliases')
+        kwargs['name'] = name
+        kwargs['id'] = await ABCog.next_id()
+        return Splinter(**kwargs)
 
     async def save(self):
         async with ABCog.bot.get_cog("SBCore").config.splinters() as splinters:

@@ -1,7 +1,8 @@
-from redbot.core import checks, Config
+from redbot.core import Config
 from redbot.core import commands
 
 from ABC import Splinter
+
 
 class SBCore(commands.Cog):
     def __init__(self, bot, *args, **kwargs):
@@ -18,10 +19,10 @@ class SBCore(commands.Cog):
             sps = [await Splinter.fromId(sp) for sp in await self.config.user(ctx.author).splinters()]
 
             for sp in sps:
-                if sp.name == query:
+                if sp.name.upper() == query.upper():
                     return sp
             for sp in sps:
-                if sp.id == query:
+                if sp.id == query.upper():
                     return sp
             return None
         else:
